@@ -4,22 +4,26 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"iter"
 	"net/http"
 	"net/url"
+	"strconv"
 	"time"
 )
 
 type APIClient struct {
-	apiKey string
-	client *http.Client
+	apiKey   string
+	client   *http.Client
+	pageSize int
 }
 
 const baseURL = "https://api.clockify.me/api/v1"
 
 func NewDefaultClient(apiKey string) *APIClient {
 	return &APIClient{
-		apiKey: apiKey,
-		client: &http.Client{},
+		apiKey:   apiKey,
+		client:   &http.Client{},
+		pageSize: 5000, // max possible page size
 	}
 }
 
@@ -134,11 +138,11 @@ func (c *APIClient) GetCurrentUser() (*User, error) {
 	return &user, nil
 }
 
-// GetWorkspaceUsers retrieves all users in a workspace
-func (c *APIClient) GetWorkspaceUsers(workspaceID string) ([]User, error) {
+// GetWorkspaceUsers retrieves a page of users in a workspace
+func (c *APIClient) GetWorkspaceUsers(workspaceID string, page int) ([]User, error) {
 	url := fmt.Sprintf("%s/workspaces/%s/users", baseURL, workspaceID)
 
-	resp, err := c.get(url)
+	resp, err := c.get(url + "?page=" + strconv.Itoa(page) + "&page-size=" + strconv.Itoa(c.pageSize))
 	if err != nil {
 		return nil, err
 	}
@@ -153,11 +157,35 @@ func (c *APIClient) GetWorkspaceUsers(workspaceID string) ([]User, error) {
 	return users, nil
 }
 
-// GetProjects retrieves all projects in a workspace
-func (c *APIClient) GetProjects(workspaceID string) ([]Project, error) {
+// IterWorkspaceUsers iterates over all users in a workspace, page by page
+func (c *APIClient) IterWorkspaceUsers(workspaceID string) iter.Seq2[[]User, error] {
+	return func(yield func([]User, error) bool) {
+		page := 1
+		for {
+			users, err := c.GetWorkspaceUsers(workspaceID, page)
+			if err != nil {
+				yield(nil, err)
+				return
+			}
+
+			if len(users) == 0 {
+				return
+			}
+
+			if !yield(users, nil) {
+				return
+			}
+
+			page++
+		}
+	}
+}
+
+// GetProjects retrieves a page of projects in a workspace
+func (c *APIClient) GetProjects(workspaceID string, page int) ([]Project, error) {
 	url := fmt.Sprintf("%s/workspaces/%s/projects", baseURL, workspaceID)
 
-	resp, err := c.get(url)
+	resp, err := c.get(url + "?page=" + strconv.Itoa(page) + "&page-size=" + strconv.Itoa(c.pageSize))
 	if err != nil {
 		return nil, err
 	}
@@ -170,6 +198,30 @@ func (c *APIClient) GetProjects(workspaceID string) ([]Project, error) {
 	}
 
 	return projects, nil
+}
+
+// IterProjects iterates over all projects in a workspace, page by page
+func (c *APIClient) IterProjects(workspaceID string) iter.Seq2[[]Project, error] {
+	return func(yield func([]Project, error) bool) {
+		page := 1
+		for {
+			projects, err := c.GetProjects(workspaceID, page)
+			if err != nil {
+				yield(nil, err)
+				return
+			}
+
+			if len(projects) == 0 {
+				return
+			}
+
+			if !yield(projects, nil) {
+				return
+			}
+
+			page++
+		}
+	}
 }
 
 // CreateProject creates a new project in a workspace
@@ -197,11 +249,11 @@ func (c *APIClient) CreateProject(workspaceID, name string) (*Project, error) {
 	return &createdProject, nil
 }
 
-// GetClients retrieves all clients in a workspace
-func (c *APIClient) GetClients(workspaceID string) ([]Client, error) {
+// GetClients retrieves a page of clients in a workspace
+func (c *APIClient) GetClients(workspaceID string, page int) ([]Client, error) {
 	url := fmt.Sprintf("%s/workspaces/%s/clients", baseURL, workspaceID)
 
-	resp, err := c.get(url)
+	resp, err := c.get(url + "?page=" + strconv.Itoa(page) + "&page-size=" + strconv.Itoa(c.pageSize))
 	if err != nil {
 		return nil, err
 	}
@@ -214,6 +266,30 @@ func (c *APIClient) GetClients(workspaceID string) ([]Client, error) {
 	}
 
 	return clients, nil
+}
+
+// IterClients iterates over all clients in a workspace, page by page
+func (c *APIClient) IterClients(workspaceID string) iter.Seq2[[]Client, error] {
+	return func(yield func([]Client, error) bool) {
+		page := 1
+		for {
+			clients, err := c.GetClients(workspaceID, page)
+			if err != nil {
+				yield(nil, err)
+				return
+			}
+
+			if len(clients) == 0 {
+				return
+			}
+
+			if !yield(clients, nil) {
+				return
+			}
+
+			page++
+		}
+	}
 }
 
 // CreateClient creates a new client in a workspace
@@ -239,11 +315,11 @@ func (c *APIClient) CreateClient(workspaceID, name string) (*Client, error) {
 	return &createdClient, nil
 }
 
-// GetTags retrieves all tags in a workspace
-func (c *APIClient) GetTags(workspaceID string) ([]Tag, error) {
+// GetTags retrieves a page of tags in a workspace
+func (c *APIClient) GetTags(workspaceID string, page int) ([]Tag, error) {
 	url := fmt.Sprintf("%s/workspaces/%s/tags", baseURL, workspaceID)
 
-	resp, err := c.get(url)
+	resp, err := c.get(url + "?page=" + strconv.Itoa(page) + "&page-size=" + strconv.Itoa(c.pageSize))
 	if err != nil {
 		return nil, err
 	}
@@ -256,6 +332,30 @@ func (c *APIClient) GetTags(workspaceID string) ([]Tag, error) {
 	}
 
 	return tags, nil
+}
+
+// IterTags iterates over all tags in a workspace, page by page
+func (c *APIClient) IterTags(workspaceID string) iter.Seq2[[]Tag, error] {
+	return func(yield func([]Tag, error) bool) {
+		page := 1
+		for {
+			tags, err := c.GetTags(workspaceID, page)
+			if err != nil {
+				yield(nil, err)
+				return
+			}
+
+			if len(tags) == 0 {
+				return
+			}
+
+			if !yield(tags, nil) {
+				return
+			}
+
+			page++
+		}
+	}
 }
 
 // CreateTag creates a new tag in a workspace
@@ -281,8 +381,8 @@ func (c *APIClient) CreateTag(workspaceID, name string) (*Tag, error) {
 	return &createdTag, nil
 }
 
-// GetTimeEntries retrieves time entries for a user in a workspace with optional filters
-func (c *APIClient) GetTimeEntries(workspaceID, userID string, start, end *time.Time) ([]TimeEntry, error) {
+// GetTimeEntries retrieves a page of time entries for a user in a workspace with optional filters
+func (c *APIClient) GetTimeEntries(workspaceID, userID string, start, end *time.Time, page int) ([]TimeEntry, error) {
 	urlStr := fmt.Sprintf("%s/workspaces/%s/user/%s/time-entries", baseURL, workspaceID, userID)
 
 	// Add query parameters for filtering
@@ -298,7 +398,7 @@ func (c *APIClient) GetTimeEntries(workspaceID, userID string, start, end *time.
 		urlStr += "?" + params.Encode()
 	}
 
-	resp, err := c.get(urlStr)
+	resp, err := c.get(urlStr + "?page=" + strconv.Itoa(page) + "&page-size=" + strconv.Itoa(c.pageSize))
 	if err != nil {
 		return nil, err
 	}
@@ -311,6 +411,30 @@ func (c *APIClient) GetTimeEntries(workspaceID, userID string, start, end *time.
 	}
 
 	return timeEntries, nil
+}
+
+// IterTimeEntries iterates over all time entries for a user in a workspace, page by page
+func (c *APIClient) IterTimeEntries(workspaceID, userID string, start, end *time.Time) iter.Seq2[[]TimeEntry, error] {
+	return func(yield func([]TimeEntry, error) bool) {
+		page := 1
+		for {
+			timeEntries, err := c.GetTimeEntries(workspaceID, userID, start, end, page)
+			if err != nil {
+				yield(nil, err)
+				return
+			}
+
+			if len(timeEntries) == 0 {
+				return
+			}
+
+			if !yield(timeEntries, nil) {
+				return
+			}
+
+			page++
+		}
+	}
 }
 
 // GetTimeEntry retrieves a specific time entry by ID
@@ -454,11 +578,11 @@ func (c *APIClient) StartTimer(workspaceID, userID, description string, projectI
 	return c.CreateTimeEntryForUser(workspaceID, userID, request)
 }
 
-// GetProjectTasks retrieves all tasks for a project
-func (c *APIClient) GetProjectTasks(workspaceID, projectID string) ([]Task, error) {
+// GetProjectTasks retrieves a page of tasks for a project
+func (c *APIClient) GetProjectTasks(workspaceID, projectID string, page int) ([]Task, error) {
 	url := fmt.Sprintf("%s/workspaces/%s/projects/%s/tasks", baseURL, workspaceID, projectID)
 
-	resp, err := c.get(url)
+	resp, err := c.get(url + "?page=" + strconv.Itoa(page) + "&page-size=" + strconv.Itoa(c.pageSize))
 	if err != nil {
 		return nil, err
 	}
@@ -471,6 +595,30 @@ func (c *APIClient) GetProjectTasks(workspaceID, projectID string) ([]Task, erro
 	}
 
 	return tasks, nil
+}
+
+// IterProjectTasks iterates over all tasks for a project, page by page
+func (c *APIClient) IterProjectTasks(workspaceID, projectID string) iter.Seq2[[]Task, error] {
+	return func(yield func([]Task, error) bool) {
+		page := 1
+		for {
+			tasks, err := c.GetProjectTasks(workspaceID, projectID, page)
+			if err != nil {
+				yield(nil, err)
+				return
+			}
+
+			if len(tasks) == 0 {
+				return
+			}
+
+			if !yield(tasks, nil) {
+				return
+			}
+
+			page++
+		}
+	}
 }
 
 // CreateTask creates a new task in a project
