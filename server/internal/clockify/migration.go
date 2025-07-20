@@ -104,7 +104,7 @@ func (m *MigrationService) ExecuteMigration() (*MigrationStats, error) {
 	}
 
 	// Step 2: Get source time entries
-	timeEntries, err := m.getSourceTimeEntries()
+	timeEntries, err := m.client.GetProjectTimeEntries(m.sourceWorkspace.ID, m.sourceProject.ID, m.currentUser.ID)
 	if err != nil {
 		return m.stats, fmt.Errorf("failed to get source time entries: %w", err)
 	}
@@ -132,14 +132,14 @@ func (m *MigrationService) initializeWorkspaces() error {
 	m.currentUser = user
 
 	// Find source workspace
-	sourceWs, err := m.findWorkspaceByName(m.config.SourceWorkspaceName)
+	sourceWs, err := m.client.FindWorkspaceByName(m.config.SourceWorkspaceName)
 	if err != nil {
 		return fmt.Errorf("failed to find source workspace '%s': %w", m.config.SourceWorkspaceName, err)
 	}
 	m.sourceWorkspace = sourceWs
 
 	// Find source project
-	sourceProj, err := m.findProjectByName(sourceWs.ID, m.config.SourceProjectName)
+	sourceProj, err := m.client.FindProjectByName(sourceWs.ID, m.config.SourceProjectName)
 	if err != nil {
 		return fmt.Errorf("failed to find source project '%s': %w", m.config.SourceProjectName, err)
 	}
@@ -160,43 +160,10 @@ func (m *MigrationService) initializeWorkspaces() error {
 	return nil
 }
 
-// findWorkspaceByName finds a workspace by name
-func (m *MigrationService) findWorkspaceByName(name string) (*Workspace, error) {
-	workspaces, err := m.client.GetWorkspaces()
-	if err != nil {
-		return nil, err
-	}
-
-	for _, ws := range workspaces {
-		if ws.Name == name {
-			return &ws, nil
-		}
-	}
-
-	return nil, fmt.Errorf("workspace '%s' not found", name)
-}
-
-// findProjectByName finds a project by name in a workspace
-func (m *MigrationService) findProjectByName(workspaceID, name string) (*Project, error) {
-	for projects, err := range m.client.IterProjects(workspaceID) {
-		if err != nil {
-			return nil, err
-		}
-
-		for _, proj := range projects {
-			if proj.Name == name {
-				return &proj, nil
-			}
-		}
-	}
-
-	return nil, fmt.Errorf("project '%s' not found in workspace", name)
-}
-
 // getOrCreateTargetWorkspace gets existing or creates new target workspace
 func (m *MigrationService) getOrCreateTargetWorkspace() (*Workspace, error) {
 	// Try to find existing workspace first
-	ws, err := m.findWorkspaceByName(m.config.TargetWorkspaceName)
+	ws, err := m.client.FindWorkspaceByName(m.config.TargetWorkspaceName)
 	if err == nil {
 		log.Printf("Using existing target workspace: %s", ws.Name)
 		return ws, nil
@@ -222,27 +189,6 @@ func (m *MigrationService) cacheTargetClients() error {
 
 	log.Printf("Cached %d existing clients in target workspace", len(m.targetClients))
 	return nil
-}
-
-// getSourceTimeEntries retrieves all time entries from source project
-func (m *MigrationService) getSourceTimeEntries() ([]TimeEntry, error) {
-	// Get time entries for the current user in the source workspace
-	// Note: You might want to add date filtering here if the project has many entries
-	var filteredEntries []TimeEntry
-
-	for timeEntries, err := range m.client.IterTimeEntries(m.sourceWorkspace.ID, m.currentUser.ID, nil, nil) {
-		if err != nil {
-			return nil, err
-		}
-
-		for _, entry := range timeEntries {
-			if entry.ProjectID == m.sourceProject.ID {
-				filteredEntries = append(filteredEntries, entry)
-			}
-		}
-	}
-
-	return filteredEntries, nil
 }
 
 // processTimeEntries processes all time entries in batches

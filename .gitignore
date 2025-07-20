@@ -36,4 +36,4 @@ go.work.sum
 .env
 
 # Test configurations
-server/cmd/test/
+server/cmd/test*/
