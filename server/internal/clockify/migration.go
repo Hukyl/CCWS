@@ -8,7 +8,7 @@ package clockify
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"regexp"
 	"strings"
 	"time"
@@ -95,8 +95,7 @@ func NewMigrationService(client *APIClient, config *MigrationConfig) *MigrationS
 
 // ExecuteMigration runs the complete migration process
 func (m *MigrationService) ExecuteMigration() (*MigrationStats, error) {
-	log.Printf("Starting migration from %s/%s to %s",
-		m.config.SourceWorkspaceName, m.config.SourceProjectName, m.config.TargetWorkspaceName)
+	slog.Info("starting_migration", "source_workspace", m.config.SourceWorkspaceName, "source_project", m.config.SourceProjectName, "target_workspace", m.config.TargetWorkspaceName)
 
 	// Step 1: Initialize workspaces and cache data
 	if err := m.initializeWorkspaces(); err != nil {
@@ -109,7 +108,7 @@ func (m *MigrationService) ExecuteMigration() (*MigrationStats, error) {
 		return m.stats, fmt.Errorf("failed to get source time entries: %w", err)
 	}
 
-	log.Printf("Found %d time entries to migrate", len(timeEntries))
+	slog.Info("found_time_entries_to_migrate", "count", len(timeEntries))
 
 	// Step 3: Process time entries in batches
 	if err := m.processTimeEntries(timeEntries); err != nil {
@@ -165,7 +164,7 @@ func (m *MigrationService) getOrCreateTargetWorkspace() (*Workspace, error) {
 	// Try to find existing workspace first
 	ws, err := m.client.FindWorkspaceByName(m.config.TargetWorkspaceName)
 	if err == nil {
-		log.Printf("Using existing target workspace: %s", ws.Name)
+		slog.Info("using_existing_target_workspace", "workspace", ws.Name)
 		return ws, nil
 	}
 
@@ -187,7 +186,7 @@ func (m *MigrationService) cacheTargetClients() error {
 		}
 	}
 
-	log.Printf("Cached %d existing clients in target workspace", len(m.targetClients))
+	slog.Info("cached_existing_clients_in_target_workspace", "count", len(m.targetClients))
 	return nil
 }
 
@@ -198,7 +197,7 @@ func (m *MigrationService) processTimeEntries(timeEntries []TimeEntry) error {
 		end = min(end, len(timeEntries))
 
 		batch := timeEntries[i:end]
-		log.Printf("Processing batch %d-%d of %d time entries", i+1, end, len(timeEntries))
+		slog.Info("processing_batch", "batch_start", i+1, "batch_end", end, "total_entries", len(timeEntries))
 
 		if err := m.processBatch(batch); err != nil {
 			return fmt.Errorf("failed to process batch %d-%d: %w", i+1, end, err)
@@ -213,7 +212,7 @@ func (m *MigrationService) processBatch(timeEntries []TimeEntry) error {
 	for _, entry := range timeEntries {
 		if err := m.processTimeEntry(&entry); err != nil {
 			m.stats.Errors = append(m.stats.Errors, fmt.Sprintf("Failed to process entry %s: %v", entry.ID, err))
-			log.Printf("Error processing time entry %s: %v", entry.ID, err)
+			slog.Error("error_processing_time_entry", "entry_id", entry.ID, "error", err)
 			continue
 		}
 		m.stats.TimeEntriesProcessed++
@@ -334,12 +333,12 @@ func (m *MigrationService) getOrCreateClient(clientName string) (*Client, error)
 
 		m.targetClients[clientName] = client
 		m.stats.ClientsCreated++
-		log.Printf("Created client: %s", clientName)
+		slog.Info("created_client", "client_name", clientName)
 		return client, nil
 	}
 
 	if m.config.DryRun {
-		log.Printf("DRY RUN: Would create client: %s", clientName)
+		slog.Info("would_create_client", "client_name", clientName, "mode", "dry_run")
 		// Return a dummy client for dry run
 		dummyClient := &Client{ID: "dummy", Name: clientName}
 		return dummyClient, nil
@@ -371,7 +370,7 @@ func (m *MigrationService) getOrCreateProject(projectName, clientID string) (*Pr
 
 	// Create new project
 	if m.config.DryRun {
-		log.Printf("DRY RUN: Would create project: %s", projectName)
+		slog.Info("would_create_project", "project_name", projectName, "mode", "dry_run")
 		dummyProject := &Project{ID: "dummy", Name: projectName, ClientID: clientID}
 		m.targetProjects[projectName] = dummyProject
 		return dummyProject, nil
@@ -384,7 +383,7 @@ func (m *MigrationService) getOrCreateProject(projectName, clientID string) (*Pr
 
 	m.targetProjects[projectName] = project
 	m.stats.ProjectsCreated++
-	log.Printf("Created project: %s", projectName)
+	slog.Info("created_project", "project_name", projectName)
 	return project, nil
 }
 
@@ -413,7 +412,7 @@ func (m *MigrationService) getOrCreateTask(projectID, taskName string) (*Task, e
 
 	// Create new task
 	if m.config.DryRun {
-		log.Printf("DRY RUN: Would create task: %s", taskName)
+		slog.Info("would_create_task", "task_name", taskName, "mode", "dry_run")
 		dummyTask := &Task{ID: "dummy", Name: taskName, ProjectID: projectID}
 		m.targetTasks[cacheKey] = dummyTask
 		return dummyTask, nil
@@ -426,17 +425,14 @@ func (m *MigrationService) getOrCreateTask(projectID, taskName string) (*Task, e
 
 	m.targetTasks[cacheKey] = task
 	m.stats.TasksCreated++
-	log.Printf("Created task: %s in project %s", taskName, projectID)
+	slog.Info("created_task", "task_name", taskName, "project_id", projectID)
 	return task, nil
 }
 
 // createTargetTimeEntry creates a time entry in the target workspace
 func (m *MigrationService) createTargetTimeEntry(sourceEntry *TimeEntry, targetProjectID, targetTaskID string) error {
 	if m.config.DryRun {
-		log.Printf("DRY RUN: Would create time entry: %s (%v to %v)",
-			sourceEntry.Description,
-			sourceEntry.TimeInterval.Start,
-			sourceEntry.TimeInterval.End)
+		slog.Info("would_create_time_entry", "description", sourceEntry.Description, "start", sourceEntry.TimeInterval.Start, "end", sourceEntry.TimeInterval.End, "mode", "dry_run")
 		return nil
 	}
 
@@ -464,19 +460,18 @@ func (m *MigrationService) createTargetTimeEntry(sourceEntry *TimeEntry, targetP
 func (m *MigrationService) logMigrationSummary() {
 	duration := m.stats.EndTime.Sub(m.stats.StartTime)
 
-	log.Printf("=== MIGRATION COMPLETED ===")
-	log.Printf("Duration: %v", duration)
-	log.Printf("Time Entries Processed: %d", m.stats.TimeEntriesProcessed)
-	log.Printf("Time Entries Created: %d", m.stats.TimeEntriesCreated)
-	log.Printf("Projects Created: %d", m.stats.ProjectsCreated)
-	log.Printf("Tasks Created: %d", m.stats.TasksCreated)
-	log.Printf("Clients Created: %d", m.stats.ClientsCreated)
-	log.Printf("Errors: %d", len(m.stats.Errors))
+	slog.Info("migration_completed", "duration", duration)
+	slog.Info("time_entries_processed", "count", m.stats.TimeEntriesProcessed)
+	slog.Info("time_entries_created", "count", m.stats.TimeEntriesCreated)
+	slog.Info("projects_created", "count", m.stats.ProjectsCreated)
+	slog.Info("tasks_created", "count", m.stats.TasksCreated)
+	slog.Info("clients_created", "count", m.stats.ClientsCreated)
+	slog.Info("errors", "count", len(m.stats.Errors))
 
 	if len(m.stats.Errors) > 0 {
-		log.Printf("Error details:")
+		slog.Info("error_details")
 		for _, err := range m.stats.Errors {
-			log.Printf("  - %s", err)
+			slog.Info("error", "error", err)
 		}
 	}
 }

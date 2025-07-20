@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"iter"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -17,7 +19,7 @@ type APIClient struct {
 	pageSize int
 }
 
-const baseURL = "https://api.clockify.me/api/v1"
+const baseURL = "https://api.clockify.me/api/v2"
 
 func NewDefaultClient(apiKey string) *APIClient {
 	return &APIClient{
@@ -29,6 +31,18 @@ func NewDefaultClient(apiKey string) *APIClient {
 
 // * HTTP methods utilities
 
+func isRespError(resp *http.Response) bool {
+	ok := resp.StatusCode < 400
+	if !ok {
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			slog.Error("error_reading_response_body", "error", err)
+		}
+		slog.Error("request_failed", "method", resp.Request.Method, "status", resp.Status, "body", string(body))
+	}
+	return !ok
+}
+
 func (c *APIClient) get(url string) (*http.Response, error) {
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -37,7 +51,16 @@ func (c *APIClient) get(url string) (*http.Response, error) {
 
 	req.Header.Set("X-Api-Key", c.apiKey)
 
-	return c.client.Do(req)
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	if isRespError(resp) {
+		return nil, fmt.Errorf("failed to %s: %s", req.Method, resp.Status)
+	}
+
+	return resp, nil
 }
 
 func (c *APIClient) post(url string, data any) (*http.Response, error) {
@@ -54,7 +77,16 @@ func (c *APIClient) post(url string, data any) (*http.Response, error) {
 	req.Header.Set("X-Api-Key", c.apiKey)
 	req.Header.Set("Content-Type", "application/json")
 
-	return c.client.Do(req)
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	if isRespError(resp) {
+		return nil, fmt.Errorf("failed to %s: %s", req.Method, resp.Status)
+	}
+
+	return resp, nil
 }
 
 func (c *APIClient) put(url string, data any) (*http.Response, error) {
@@ -71,7 +103,16 @@ func (c *APIClient) put(url string, data any) (*http.Response, error) {
 	req.Header.Set("X-Api-Key", c.apiKey)
 	req.Header.Set("Content-Type", "application/json")
 
-	return c.client.Do(req)
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	if isRespError(resp) {
+		return nil, fmt.Errorf("failed to %s: %s", req.Method, resp.Status)
+	}
+
+	return resp, nil
 }
 
 func (c *APIClient) delete(url string) (*http.Response, error) {
@@ -82,7 +123,16 @@ func (c *APIClient) delete(url string) (*http.Response, error) {
 
 	req.Header.Set("X-Api-Key", c.apiKey)
 
-	return c.client.Do(req)
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	if isRespError(resp) {
+		return nil, fmt.Errorf("failed to %s: %s", req.Method, resp.Status)
+	}
+
+	return resp, nil
 }
 
 func (c *APIClient) patch(url string, data any) (*http.Response, error) {
@@ -99,7 +149,16 @@ func (c *APIClient) patch(url string, data any) (*http.Response, error) {
 	req.Header.Set("X-Api-Key", c.apiKey)
 	req.Header.Set("Content-Type", "application/json")
 
-	return c.client.Do(req)
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	if isRespError(resp) {
+		return nil, fmt.Errorf("failed to %s: %s", req.Method, resp.Status)
+	}
+
+	return resp, nil
 }
 
 // * Actual API methods
@@ -503,6 +562,82 @@ func (c *APIClient) CreateTask(workspaceID, projectID, name string) (*Task, erro
 	}
 
 	return &createdTask, nil
+}
+
+// CreateWebhook creates a new webhook in a workspace
+func (c *APIClient) CreateWebhook(workspaceID string, request WebhookRequest) (*Webhook, error) {
+	url := fmt.Sprintf("%s/workspaces/%s/webhooks", baseURL, workspaceID)
+
+	resp, err := c.post(url, request)
+	if err != nil {
+		return nil, err
+	}
+
+	defer resp.Body.Close()
+
+	var createdWebhook Webhook
+	if err := json.NewDecoder(resp.Body).Decode(&createdWebhook); err != nil {
+		return nil, err
+	}
+
+	return &createdWebhook, nil
+}
+
+// DeleteWebhook deletes a webhook in a workspace
+func (c *APIClient) DeleteWebhook(workspaceID, webhookID string) error {
+	url := fmt.Sprintf("%s/workspaces/%s/webhooks/%s", baseURL, workspaceID, webhookID)
+
+	resp, err := c.delete(url)
+	if err != nil {
+		return err
+	}
+
+	defer resp.Body.Close()
+
+	return nil
+}
+
+// GetWebhooks retrieves all webhooks in a workspace
+func (c *APIClient) GetWebhooks(workspaceID string) ([]Webhook, error) {
+	url := fmt.Sprintf("%s/workspaces/%s/webhooks", baseURL, workspaceID)
+
+	resp, err := c.get(url)
+	if err != nil {
+		return nil, err
+	}
+
+	defer resp.Body.Close()
+
+	type webhookResponse struct {
+		Webhooks              []Webhook `json:"webhooks"`
+		WorkspaceWebhookCount int       `json:"workspaceWebhookCount"`
+	}
+
+	var response webhookResponse
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		return nil, err
+	}
+
+	return response.Webhooks, nil
+}
+
+// GenerateWebhookAuthToken generates a new auth token for a webhook
+func (c *APIClient) GenerateWebhookAuthToken(workspaceID, webhookID string) (*Webhook, error) {
+	url := fmt.Sprintf("%s/workspaces/%s/webhooks/%s/auth-token", baseURL, workspaceID, webhookID)
+
+	resp, err := c.patch(url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	defer resp.Body.Close()
+
+	var webhook Webhook
+	if err := json.NewDecoder(resp.Body).Decode(&webhook); err != nil {
+		return nil, err
+	}
+
+	return &webhook, nil
 }
 
 // * Helper methods to simplify common operations

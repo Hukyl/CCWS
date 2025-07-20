@@ -209,3 +209,95 @@ type HistoricalEntry struct {
 	TagIDs      []string      `json:"tagIds,omitempty"`
 	Billable    bool          `json:"billable"`
 }
+
+// Webhooks
+
+// WebhookTriggerSourceType represents the type of the source of the webhook trigger
+type WebhookTriggerSourceType string
+
+// WebhookTriggerSourceType values
+const (
+	ProjectIDTrigger    WebhookTriggerSourceType = "PROJECT_ID"
+	UserIDTrigger       WebhookTriggerSourceType = "USER_ID"
+	TagIDTrigger        WebhookTriggerSourceType = "TAG_ID"
+	TaskIDTrigger       WebhookTriggerSourceType = "TASK_ID"
+	WorkspaceIDTrigger  WebhookTriggerSourceType = "WORKSPACE_ID"
+	UserGroupIDTrigger  WebhookTriggerSourceType = "USER_GROUP_ID"
+	InvoiceIDTrigger    WebhookTriggerSourceType = "INVOICE_ID"
+	AssignmentIDTrigger WebhookTriggerSourceType = "ASSIGNMENT_ID"
+	ExpenseIDTrigger    WebhookTriggerSourceType = "EXPENSE_ID"
+)
+
+// WebhookEvent represents the type of the event that triggered the webhook
+type WebhookEvent string
+
+// WebhookEvent values
+const (
+	NewProjectEvent                   WebhookEvent = "NEW_PROJECT"
+	NewTaskEvent                      WebhookEvent = "NEW_TASK"
+	NewClientEvent                    WebhookEvent = "NEW_CLIENT"
+	NewTimerStartedEvent              WebhookEvent = "NEW_TIMER_STARTED"
+	TimerStoppedEvent                 WebhookEvent = "TIMER_STOPPED"
+	TimeEntryUpdatedEvent             WebhookEvent = "TIME_ENTRY_UPDATED"
+	TimeEntryDeletedEvent             WebhookEvent = "TIME_ENTRY_DELETED"
+	TimeEntrySplitEvent               WebhookEvent = "TIME_ENTRY_SPLIT"
+	NewTimeEntryEvent                 WebhookEvent = "NEW_TIME_ENTRY"
+	TimeEntryRestoredEvent            WebhookEvent = "TIME_ENTRY_RESTORED"
+	NewTagEvent                       WebhookEvent = "NEW_TAG"
+	UserDeletedFromWorkspaceEvent     WebhookEvent = "USER_DELETED_FROM_WORKSPACE"
+	UserJoinedWorkspaceEvent          WebhookEvent = "USER_JOINED_WORKSPACE"
+	UserDeactivatedOnWorkspaceEvent   WebhookEvent = "USER_DEACTIVATED_ON_WORKSPACE"
+	UserActivatedOnWorkspaceEvent     WebhookEvent = "USER_ACTIVATED_ON_WORKSPACE"
+	UserEmailChangedEvent             WebhookEvent = "USER_EMAIL_CHANGED"
+	UserUpdatedEvent                  WebhookEvent = "USER_UPDATED"
+	NewInvoiceEvent                   WebhookEvent = "NEW_INVOICE"
+	InvoiceUpdatedEvent               WebhookEvent = "INVOICE_UPDATED"
+	NewApprovalRequestEvent           WebhookEvent = "NEW_APPROVAL_REQUEST"
+	ApprovalRequestStatusUpdatedEvent WebhookEvent = "APPROVAL_REQUEST_STATUS_UPDATED"
+	TimeOffRequestRequestedEvent      WebhookEvent = "TIME_OFF_REQUESTED"
+	TimeOffRequestApprovedEvent       WebhookEvent = "TIME_OFF_REQUEST_APPROVED"
+	TimeOffRequestRejectedEvent       WebhookEvent = "TIME_OFF_REQUEST_REJECTED"
+	TimeOffRequestWithdrawnEvent      WebhookEvent = "TIME_OFF_REQUEST_WITHDRAWN"
+	BalanceUpdatedEvent               WebhookEvent = "BALANCE_UPDATED"
+	TagUpdatedEvent                   WebhookEvent = "TAG_UPDATED"
+	TagDeletedEvent                   WebhookEvent = "TAG_DELETED"
+	TaskUpdatedEvent                  WebhookEvent = "TASK_UPDATED"
+	ClientUpdatedEvent                WebhookEvent = "CLIENT_UPDATED"
+	TaskDeletedEvent                  WebhookEvent = "TASK_DELETED"
+	ClientDeletedEvent                WebhookEvent = "CLIENT_DELETED"
+	ExpenseRestoredEvent              WebhookEvent = "EXPENSE_RESTORED"
+	AssignmentCreatedEvent            WebhookEvent = "ASSIGNMENT_CREATED"
+	AssignmentDeletedEvent            WebhookEvent = "ASSIGNMENT_DELETED"
+	AssignmentPublishedEvent          WebhookEvent = "ASSIGNMENT_PUBLISHED"
+	AssignmentUpdatedEvent            WebhookEvent = "ASSIGNMENT_UPDATED"
+	ExpenseCreatedEvent               WebhookEvent = "EXPENSE_CREATED"
+	ExpenseDeletedEvent               WebhookEvent = "EXPENSE_DELETED"
+	ExpenseUpdatedEvent               WebhookEvent = "EXPENSE_UPDATED"
+)
+
+// WebhookRequest represents the structure for creating a new webhook
+type WebhookRequest struct {
+	Name              string                     `json:"name"`
+	TriggerSource     []WebhookTriggerSourceType `json:"triggerSource"`
+	TriggerSourceType WebhookTriggerSourceType   `json:"triggerSourceType"`
+	TargetURL         string                     `json:"url"`
+	Event             WebhookEvent               `json:"webhookEvent"`
+}
+
+// Webhook represents a webhook in Clockify
+type Webhook struct {
+	AuthToken         string                     `json:"authToken"`
+	Enabled           bool                       `json:"enabled"`
+	ID                string                     `json:"id"`
+	Name              string                     `json:"name"`
+	TriggerSource     []WebhookTriggerSourceType `json:"triggerSource"`
+	TriggerSourceType WebhookTriggerSourceType   `json:"triggerSourceType"`
+	TargetURL         string                     `json:"url"`
+	UserID            string                     `json:"userId"`
+	Event             WebhookEvent               `json:"webhookEvent"`
+	WorkspaceID       string                     `json:"workspaceId"`
+}
+
+func (w Webhook) String() string {
+	return fmt.Sprintf("Webhook <%s>: %s listening for %s at %s", w.ID, w.Name, w.Event, w.TargetURL)
+}

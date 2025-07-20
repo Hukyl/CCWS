@@ -1,3 +1,10 @@
 {
-  "cSpell.words": ["Clockify", "ComindWork", "CCWS", "Hukyl", "envconfig"]
+  "cSpell.words": [
+    "Clockify",
+    "ComindWork",
+    "CCWS",
+    "Hukyl",
+    "envconfig",
+    "kebabify"
+  ]
 }
